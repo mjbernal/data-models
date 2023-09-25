@@ -10,7 +10,7 @@ from jsonschema import validate
 import requests
 
 import urllib.request
-from .utils import extract_subject_from_raw_url, extract_datamodel_from_raw_url, \
+from utils import extract_subject_from_raw_url, extract_datamodel_from_raw_url, \
                     open_jsonref, parse_property, normalized2keyvalues, create_context, \
                     generate_random_string
 
@@ -412,6 +412,7 @@ def ngsi_datatype_attribute(subject, datamodel, attribute):
     else:
         return False
 
+
 # 12
 def validate_data_model_schema(schema_url):
     """Validates a json schema defining a data model.
@@ -496,6 +497,7 @@ def validate_data_model_schema(schema_url):
                         output[prop]
                     except:
                         output[prop] = {}
+                        output[prop]["x-ngsi"] = {}
                     for item in list(schemaPayload["properties"][prop]):
                         # echo("parsing at level " + str(level) + " item= ", item)
 
@@ -1039,7 +1041,26 @@ def update_broker(datamodel, subject, attribute, value, entityId=None, serverUrl
     """
 
     # from pysmartdatamodels import pysmartdatamodels as sdm
+    
+    
+    """
+    from jsonschema import validators, Draft202012Validator
+    from geojson import Point, LineString, Polygon, MultiPoint, MultiLineString, MultiPolygon
 
+    # Primitive types: "null", "boolean", "object", "array", "number", or "string"
+    # Redefine one of the primitives to include Geometry classes
+    def is_geometry(checker, instance):
+        return (Draft202012Validator.TYPE_CHECKER.is_type(instance, "number") or
+            isinstance(instance, Point) or isinstance(instance, LineString) or
+            isinstance(instance, Polygon) or isinstance(instance, MultiPoint) or
+            isinstance(instance, MultiPoint) or isinstance(instance, MultiLineString) or
+            isinstance(instance, MultiPolygon)
+        )
+    # Create new custom validator to check geo types
+    type_checker = Draft202012Validator.TYPE_CHECKER.redefine("number", is_geometry)
+    CustomValidator = validators.extend(Draft202012Validator, type_checker=type_checker)
+    """
+    
     def insert_in_broker(broker_url, entity):
         import requests
         import json
@@ -1080,7 +1101,7 @@ def update_broker(datamodel, subject, attribute, value, entityId=None, serverUrl
         print(entity_url)
 
         try:
-            response = requests.patch(entity_url, json=updated_properties, headers=headers)
+            response = requests.post(entity_url, json=updated_properties, headers=headers)
 
             if response.status_code == 204:  # 204 indicates a successful update with no content response
                 return True
@@ -1119,12 +1140,19 @@ def update_broker(datamodel, subject, attribute, value, entityId=None, serverUrl
                 return [False, "The attribute : " + attribute + " is not found in the data model: " + datamodel]
             else:
                 data_type = datatype_attribute(subject, datamodel, attribute)
+
+                if not data_type:
+                    data_ngsi_type = ngsi_datatype_attribute(subject, datamodel, attribute)
+                    if data_ngsi_type == "GeoProperty":
+                        data_type = "object"
+
                 # Define your JSON schema
                 schema = {
                     "type": data_type
                 }
                 try:
-                    # Validate the variable against the schema
+                    # Check Geometry types: Point...
+                    #validate(value, schema, cls=CustomValidator)
                     validate(value, schema)
                     print("Variable matches the specified data type.")
 
@@ -1138,7 +1166,7 @@ def update_broker(datamodel, subject, attribute, value, entityId=None, serverUrl
                             return [True, {"id": id_random, "type": datamodel, attribute: value, "@context": create_context(subject)}]
 
                     else: # there is an entity so let's update
-                        payload = {"id": entityId, "type": datamodel, attribute: value, "@context": create_context(subject)}
+                        payload = {attribute: value, "@context": create_context(subject)}
                         if serverUrl is not None:
                             result = update_entity_in_broker(entityId, payload, serverUrl)
                             if result:
