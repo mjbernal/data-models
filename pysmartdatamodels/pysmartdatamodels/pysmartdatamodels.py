@@ -10,7 +10,7 @@ from jsonschema import validate
 import requests
 
 import urllib.request
-from utils import extract_subject_from_raw_url, extract_datamodel_from_raw_url, \
+from .utils import extract_subject_from_raw_url, extract_datamodel_from_raw_url, \
                     open_jsonref, parse_property, normalized2keyvalues, create_context, \
                     generate_random_string
 
